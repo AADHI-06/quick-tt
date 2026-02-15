@@ -1,0 +1,196 @@
+import os
+import random
+import mysql.connector as sqltor
+from datetime import date
+import calendar
+
+# ---------------- DATABASE CONNECTION ---------------- #
+
+DB_PASSWORD = os.getenv("TT_DB_PASSWORD")
+
+if not DB_PASSWORD:
+    raise ValueError("Set environment variable TT_DB_PASSWORD")
+
+mycon = sqltor.connect(
+    host="localhost",
+    user="root",
+    password=DB_PASSWORD,
+    database="timetable"
+)
+
+cursor = mycon.cursor()
+
+# ---------------- UTILITIES ---------------- #
+
+today = date.today()
+day_name = calendar.day_name[today.weekday()]
+
+VALID_COLUMNS = ["12B", "12N", "12A", "11B", "11N", "11A"]
+
+def safe_identifier(name):
+    """Allow only safe SQL names."""
+    if not name.replace("_", "").isalnum():
+        raise ValueError("Invalid identifier")
+    return name
+
+# ---------------- SUBJECT INPUT ---------------- #
+
+def collect_subjects(class_name, allowed_subjects, total_periods):
+    print(f"\nEntering subjects for {class_name}")
+    result = []
+
+    while len(result) < total_periods:
+        sub = input("Subject > ").upper()
+
+        if sub not in allowed_subjects:
+            print("Invalid subject")
+            continue
+
+        try:
+            count = int(input("No. of periods > "))
+        except ValueError:
+            print("Enter a number")
+            continue
+
+        if len(result) + count > total_periods:
+            print("Exceeds limit")
+            continue
+
+        result.extend([sub] * count)
+
+    return result
+
+# ---------------- SCHEDULER ---------------- #
+
+def generate_timetable(data, periods, max_attempts=200):
+    """
+    Try multiple shuffles until no clashes occur.
+    """
+    for _ in range(max_attempts):
+        shuffled = {k: random.sample(v, len(v)) for k, v in data.items()}
+
+        clash = False
+        for i in range(periods):
+            slot = [shuffled[k][i] for k in shuffled]
+            if len(slot) != len(set(slot)):  # duplicate teacher clash
+                clash = True
+                break
+
+        if not clash:
+            return shuffled
+
+    raise RuntimeError("Unable to generate clash-free timetable")
+
+# ---------------- DATABASE OPERATIONS ---------------- #
+
+def save_timetable(table_name, timetable, periods):
+    table_name = safe_identifier(table_name)
+
+    cursor.execute(f"""
+        CREATE TABLE {table_name}(
+        PDno INT PRIMARY KEY,
+        12B VARCHAR(20),
+        12N VARCHAR(20),
+        12A VARCHAR(20),
+        11B VARCHAR(20),
+        11N VARCHAR(20),
+        11A VARCHAR(20)
+        )
+    """)
+
+    for i in range(periods):
+        values = (
+            i+1,
+            timetable["12B"][i],
+            timetable["12N"][i],
+            timetable["12A"][i],
+            timetable["11B"][i],
+            timetable["11N"][i],
+            timetable["11A"][i]
+        )
+
+        cursor.execute(
+            f"INSERT INTO {table_name} VALUES (%s,%s,%s,%s,%s,%s,%s)",
+            values
+        )
+
+    mycon.commit()
+
+def show_tables():
+    cursor.execute("SHOW TABLES")
+    for i, t in enumerate(cursor.fetchall(), start=1):
+        print(i, t[0])
+
+def view_table(name):
+    name = safe_identifier(name)
+    cursor.execute(f"SELECT * FROM {name}")
+    for row in cursor.fetchall():
+        print(row)
+
+def update_entry(name):
+    name = safe_identifier(name)
+
+    column = input("Column (12B/12N/etc) > ").upper()
+    if column not in VALID_COLUMNS:
+        print("Invalid column")
+        return
+
+    period = int(input("Period number > "))
+    subject = input("New subject > ")
+
+    cursor.execute(
+        f"UPDATE {name} SET {column}=%s WHERE PDno=%s",
+        (subject, period)
+    )
+    mycon.commit()
+
+def delete_table(name):
+    name = safe_identifier(name)
+    cursor.execute(f"DROP TABLE {name}")
+    mycon.commit()
+
+# ---------------- MAIN MENU ---------------- #
+
+def create_timetable():
+    periods = int(input("Total periods > "))
+
+    sci_subjects = ["MATH/CS","PHY","CHEM","BOT/CS","ZOO/CS","ENG","PT"]
+    arts_subjects = ["MATH/CS","BS","ACC","ECO","COM","ENG","PT"]
+
+    data = {
+        "12B": collect_subjects("12 BOARD", sci_subjects, periods),
+        "12N": collect_subjects("12 NEET/JEE", sci_subjects, periods),
+        "12A": collect_subjects("12 ARTS", arts_subjects, periods),
+        "11B": collect_subjects("11 BOARD", sci_subjects, periods),
+        "11N": collect_subjects("11 NEET/JEE", sci_subjects, periods),
+        "11A": collect_subjects("11 ARTS", arts_subjects, periods),
+    }
+
+    timetable = generate_timetable(data, periods)
+
+    print("\nGenerated Timetable:\n")
+    for i in range(periods):
+        print(i+1, [timetable[k][i] for k in VALID_COLUMNS])
+
+    name = input("Save as table name (e.g. mon20250215) > ")
+    save_timetable(name, timetable, periods)
+
+# ---------------- LOOP ---------------- #
+
+while True:
+    print("\n1.Create\n2.List\n3.View\n4.Edit\n5.Delete\n6.Exit")
+
+    choice = input("> ")
+
+    if choice == "1":
+        create_timetable()
+    elif choice == "2":
+        show_tables()
+    elif choice == "3":
+        view_table(input("Table name > "))
+    elif choice == "4":
+        update_entry(input("Table name > "))
+    elif choice == "5":
+        delete_table(input("Table name > "))
+    elif choice == "6":
+        break
