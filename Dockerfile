@@ -25,4 +25,4 @@ COPY --from=frontend-build /app/dist ./web/dist
 ENV TT_DB_PASSWORD=placeholder
 
 # Run the application
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["sh", "-c", "uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8080}"]

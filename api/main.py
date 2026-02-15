@@ -13,7 +13,10 @@ from .models import TimetableCreate, TimetableResponse, GenerateRequest
 app = FastAPI(title="Timetable Management API")
 
 # Mount static files
-app.mount("/assets", StaticFiles(directory="web/dist/assets"), name="assets")
+if os.path.exists("web/dist/assets"):
+    app.mount("/assets", StaticFiles(directory="web/dist/assets"), name="assets")
+else:
+    print("WARNING: web/dist/assets not found. Frontend assets will not be served.")
 
 # Dependency
 def get_db():
