@@ -1,6 +1,9 @@
 from fastapi import FastAPI, HTTPException, Depends
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List
+import os
 
 from timetable_system.models import init_db, SessionLocal
 from timetable_system.repositories.timetable_manager import TimetableManager
@@ -8,6 +11,9 @@ from timetable_system.services.scheduler import TimetableScheduler
 from .models import TimetableCreate, TimetableResponse, GenerateRequest
 
 app = FastAPI(title="Timetable Management API")
+
+# Mount static files
+app.mount("/assets", StaticFiles(directory="web/dist/assets"), name="assets")
 
 # Dependency
 def get_db():
@@ -90,3 +96,11 @@ def delete_timetable(name: str, db: Session = Depends(get_db)):
     if not success:
         raise HTTPException(status_code=404, detail="Timetable not found")
     return {"message": "Deleted successfully"}
+
+# Catch-all for SPA
+@app.get("/{full_path:path}")
+async def serve_frontend(full_path: str):
+    possible_path = os.path.join("web/dist", full_path)
+    if os.path.exists(possible_path) and os.path.isfile(possible_path):
+        return FileResponse(possible_path)
+    return FileResponse("web/dist/index.html")
