@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from sqlalchemy.orm import Session
 from typing import List
 import os
@@ -106,4 +106,25 @@ async def serve_frontend(full_path: str):
     possible_path = os.path.join("web/dist", full_path)
     if os.path.exists(possible_path) and os.path.isfile(possible_path):
         return FileResponse(possible_path)
-    return FileResponse("web/dist/index.html")
+    
+    index_path = "web/dist/index.html"
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+        
+    return HTMLResponse(
+        content=f"<h1>Deployment Error</h1><p>Frontend not found. Checked {os.path.abspath(index_path)}</p>", 
+        status_code=404
+    )
+
+@app.on_event("startup")
+async def startup_check():
+    print("--- Startup Check ---")
+    print(f"CWD: {os.getcwd()}")
+    if os.path.exists("web/dist"):
+        print("web/dist exists. Contents:")
+        for root, dirs, files in os.walk("web/dist"):
+            for name in files:
+                print(os.path.join(root, name))
+    else:
+        print("web/dist does NOT exist.")
+    print("---------------------")
