@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List
 import os
@@ -11,6 +12,14 @@ from timetable_system.services.scheduler import TimetableScheduler
 from .models import TimetableCreate, TimetableResponse, GenerateRequest
 
 app = FastAPI(title="Timetable Management API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Mount static files
 if os.path.exists("web/dist/assets"):

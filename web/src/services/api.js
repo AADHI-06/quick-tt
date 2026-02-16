@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-    baseURL: 'https://quick-tt-1.onrender.com'
+    baseURL: '/'
 });
 
 export const getTimetables = () => api.get('/timetables');
